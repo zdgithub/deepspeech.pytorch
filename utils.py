@@ -25,7 +25,7 @@ def reduce_tensor(tensor, world_size, reduce_op_max=False):
 
 def check_loss(loss, loss_value):
     """
-    Check that warp-ctc loss is valid and will not break training
+    Check that ctc loss is valid and will not break training
     :return: Return if loss is valid, and the error in case it is not
     """
     loss_valid = True

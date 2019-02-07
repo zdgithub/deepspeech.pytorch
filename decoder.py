@@ -96,7 +96,7 @@ class BeamCTCDecoder(Decoder):
         except ImportError:
             raise ImportError("BeamCTCDecoder requires paddledecoder package.")
         self._decoder = CTCBeamDecoder(labels, lm_path, alpha, beta, cutoff_top_n, cutoff_prob, beam_width,
-                                       num_processes, blank_index)
+                                       num_processes, blank_index, log_probs_input=True)
 
     def convert_to_strings(self, out, seq_len):
         results = []
