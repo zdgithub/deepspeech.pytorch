@@ -80,7 +80,7 @@ class SpectrogramParser(AudioParser):
         # STFT
         D = librosa.stft(y, n_fft=n_fft, hop_length=hop_length,
                          win_length=win_length, window=self.window)
-        spect, phase = librosa.magphase(D)
+        spect = np.abs(D)
         # S = log(S+1)
         spect = np.log1p(spect)
         spect = torch.FloatTensor(spect)
