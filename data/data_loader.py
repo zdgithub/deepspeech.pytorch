@@ -1,33 +1,31 @@
-import os
+import math
 import subprocess
-from tempfile import NamedTemporaryFile
-
-from torch.distributed import get_rank
-from torch.distributed import get_world_size
-from torch.utils.data.sampler import Sampler
 
 import librosa
 import numpy as np
+import resampy
 import scipy.signal
 import torch
-import torchaudio
-import math
+from scipy.io import wavfile
+from torch.distributed import get_rank
+from torch.distributed import get_world_size
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
+from torch.utils.data.sampler import Sampler
+
+from data.augmentation import load_randomly_augmented_audio
 
 windows = {'hamming': scipy.signal.hamming, 'hann': scipy.signal.hann, 'blackman': scipy.signal.blackman,
            'bartlett': scipy.signal.bartlett}
 
 
-def load_audio(path):
-    sound, _ = torchaudio.load(path, normalization=True)
-    sound = sound.numpy().T
-    if len(sound.shape) > 1:
-        if sound.shape[1] == 1:
-            sound = sound.squeeze()
-        else:
-            sound = sound.mean(axis=1)  # multiple channels, average
-    return sound
+def load_audio(file_path, target_sample_rate):
+    sample_rate, data = wavfile.read(file_path)
+    if sample_rate != target_sample_rate:
+        print("The sample rate of audio files are different to the target sample rate,"
+              " this may come with a significant slow-down")
+        data = resampy.resample(data, sample_rate, target_sample_rate, filter='kaiser_fast')
+    return data, target_sample_rate
 
 
 class AudioParser(object):
@@ -45,39 +43,6 @@ class AudioParser(object):
         """
         raise NotImplementedError
 
-
-class NoiseInjection(object):
-    def __init__(self,
-                 path=None,
-                 sample_rate=16000,
-                 noise_levels=(0, 0.5)):
-        """
-        Adds noise to an input signal with specific SNR. Higher the noise level, the more noise added.
-        Modified code from https://github.com/willfrey/audio/blob/master/torchaudio/transforms.py
-        """
-        if not os.path.exists(path):
-            print("Directory doesn't exist: {}".format(path))
-            raise IOError
-        self.paths = path is not None and librosa.util.find_files(path)
-        self.sample_rate = sample_rate
-        self.noise_levels = noise_levels
-
-    def inject_noise(self, data):
-        noise_path = np.random.choice(self.paths)
-        noise_level = np.random.uniform(*self.noise_levels)
-        return self.inject_noise_sample(data, noise_path, noise_level)
-
-    def inject_noise_sample(self, data, noise_path, noise_level):
-        noise_len = get_audio_length(noise_path)
-        data_len = len(data) / self.sample_rate
-        noise_start = np.random.rand() * (noise_len - data_len)
-        noise_end = noise_start + data_len
-        noise_dst = audio_with_sox(noise_path, self.sample_rate, noise_start, noise_end)
-        assert len(data) == len(noise_dst)
-        noise_energy = np.sqrt(noise_dst.dot(noise_dst) / noise_dst.size)
-        data_energy = np.sqrt(data.dot(data) / data.size)
-        data += noise_level * noise_dst * data_energy / noise_energy
-        return data
 
 
 class SpectrogramParser(AudioParser):
@@ -104,7 +69,7 @@ class SpectrogramParser(AudioParser):
         if self.augment:
             y = load_randomly_augmented_audio(audio_path, self.sample_rate)
         else:
-            y = load_audio(audio_path)
+            y = load_audio(audio_path, self.sample_rate)
         if self.noiseInjector:
             add_noise = np.random.binomial(1, self.noise_prob)
             if add_noise:
@@ -269,47 +234,3 @@ class DistributedBucketingSampler(Sampler):
 def get_audio_length(path):
     output = subprocess.check_output(['soxi -D \"%s\"' % path.strip()], shell=True)
     return float(output)
-
-
-def audio_with_sox(path, sample_rate, start_time, end_time):
-    """
-    crop and resample the recording with sox and loads it.
-    """
-    with NamedTemporaryFile(suffix=".wav") as tar_file:
-        tar_filename = tar_file.name
-        sox_params = "sox \"{}\" -r {} -c 1 -b 16 -e si {} trim {} ={} >/dev/null 2>&1".format(path, sample_rate,
-                                                                                               tar_filename, start_time,
-                                                                                               end_time)
-        os.system(sox_params)
-        y = load_audio(tar_filename)
-        return y
-
-
-def augment_audio_with_sox(path, sample_rate, tempo, gain):
-    """
-    Changes tempo and gain of the recording with sox and loads it.
-    """
-    with NamedTemporaryFile(suffix=".wav") as augmented_file:
-        augmented_filename = augmented_file.name
-        sox_augment_params = ["tempo", "{:.3f}".format(tempo), "gain", "{:.3f}".format(gain)]
-        sox_params = "sox \"{}\" -r {} -c 1 -b 16 -e si {} {} >/dev/null 2>&1".format(path, sample_rate,
-                                                                                      augmented_filename,
-                                                                                      " ".join(sox_augment_params))
-        os.system(sox_params)
-        y = load_audio(augmented_filename)
-        return y
-
-
-def load_randomly_augmented_audio(path, sample_rate=16000, tempo_range=(0.85, 1.15),
-                                  gain_range=(-6, 8)):
-    """
-    Picks tempo and gain uniformly, applies it to the utterance by using sox utility.
-    Returns the augmented utterance.
-    """
-    low_tempo, high_tempo = tempo_range
-    tempo_value = np.random.uniform(low=low_tempo, high=high_tempo)
-    low_gain, high_gain = gain_range
-    gain_value = np.random.uniform(low=low_gain, high=high_gain)
-    audio = augment_audio_with_sox(path=path, sample_rate=sample_rate,
-                                   tempo=tempo_value, gain=gain_value)
-    return audio
