@@ -355,8 +355,7 @@ if __name__ == '__main__':
                                             wer_results=wer_results, cer_results=cer_results),
                        file_path)
         # anneal lr
-        param_groups = optimizer.optimizer.param_groups if args.mixed_precision else optimizer.param_groups
-        for g in param_groups:
+        for g in optimizer.param_groups:
             g['lr'] = g['lr'] / args.learning_anneal
         print('Learning rate annealed to: {lr:.6f}'.format(lr=g['lr']))
 
