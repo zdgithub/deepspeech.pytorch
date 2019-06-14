@@ -7,7 +7,7 @@ import time
 import numpy as np
 import torch.distributed as dist
 import torch.utils.data.distributed
-from apex.fp16_utils import FP16_Optimizer
+from apex import amp
 from apex.parallel import DistributedDataParallel
 from tqdm import tqdm
 from warpctc_pytorch import CTCLoss
@@ -77,15 +77,10 @@ parser.add_argument('--rank', default=0, type=int,
 parser.add_argument('--gpu-rank', default=None,
                     help='If using distributed parallel for multi-gpu, sets the GPU for the process')
 parser.add_argument('--seed', default=123456, type=int, help='Seed to generators')
-parser.add_argument('--mixed-precision', action='store_true',
-                    help='Uses mixed precision to train a model (suggested with volta and above)')
-parser.add_argument('--static-loss-scale', type=float, default=1,
-                    help='Static loss scale for mixed precision, ' +
-                         'positive power of 2 values can improve FP16 convergence,' +
-                         'however dynamic loss scaling is preferred.')
-parser.add_argument('--dynamic-loss-scale', action='store_true',
-                    help='Use dynamic loss scaling for mixed precision. If supplied, this argument supersedes ' +
-                         '--static_loss_scale. Suggested to turn on for mixed precision')
+parser.add_argument('--opt-level', type=str)
+parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
+parser.add_argument('--loss-scale', type=str, default=None)
+
 torch.manual_seed(123456)
 torch.cuda.manual_seed_all(123456)
 
@@ -123,8 +118,6 @@ if __name__ == '__main__':
     random.seed(args.seed)
 
     device = torch.device("cuda" if args.cuda else "cpu")
-    if args.mixed_precision and not args.cuda:
-        raise ValueError('If using mixed precision training, CUDA must be enabled!')
     args.distributed = args.world_size > 1
     main_proc = True
     device = torch.device("cuda" if args.cuda else "cpu")
@@ -150,7 +143,7 @@ if __name__ == '__main__':
         print("Loading checkpoint model %s" % args.continue_from)
         package = torch.load(args.continue_from, map_location=lambda storage, loc: storage)
         model = DeepSpeech.load_model_package(package)
-        labels = model.labels 
+        labels = model.labels
         audio_conf = model.audio_conf
         if not args.finetune:  # Don't want to restart training
             optim_state = package['optim_dict']
@@ -211,19 +204,19 @@ if __name__ == '__main__':
         train_sampler.shuffle(start_epoch)
 
     model = model.to(device)
-    if args.mixed_precision:
-        model = convert_model_to_half(model)
     parameters = model.parameters()
     optimizer = torch.optim.SGD(parameters, lr=args.lr,
                                 momentum=args.momentum, nesterov=True, weight_decay=1e-5)
-    if args.distributed:
-        model = DistributedDataParallel(model)
-    if args.mixed_precision:
-        optimizer = FP16_Optimizer(optimizer,
-                                   static_loss_scale=args.static_loss_scale,
-                                   dynamic_loss_scale=args.dynamic_loss_scale)
     if optim_state is not None:
         optimizer.load_state_dict(optim_state)
+
+    model, optimizer = amp.initialize(model, optimizer,
+                                      opt_level=args.opt_level,
+                                      keep_batchnorm_fp32=args.keep_batchnorm_fp32,
+                                      loss_scale=args.loss_scale
+                                      )
+    if args.distributed:
+        model = DistributedDataParallel(model)
     print(model)
     print("Number of parameters: %d" % DeepSpeech.get_param_size(model))
 
@@ -263,12 +256,10 @@ if __name__ == '__main__':
             if valid_loss:
                 optimizer.zero_grad()
                 # compute gradient
-                if args.mixed_precision:
-                    optimizer.backward(loss)
-                    optimizer.clip_master_grads(args.max_norm)
-                else:
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_norm)
+
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+                optimizer.clip_master_grads(args.max_norm)
                 optimizer.step()
             else:
                 print(error)
