@@ -110,6 +110,7 @@ class AverageMeter(object):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    args.mixed_precision = True
 
     # Set seeds for determinism
     torch.manual_seed(args.seed)
@@ -181,8 +182,7 @@ if __name__ == '__main__':
                            labels=labels,
                            rnn_type=supported_rnns[rnn_type],
                            audio_conf=audio_conf,
-                           bidirectional=args.bidirectional,
-                           mixed_precision=args.mixed_precision)
+                           bidirectional=args.bidirectional)
 
     decoder = GreedyDecoder(labels)
     train_dataset = SpectrogramDataset(audio_conf=audio_conf, manifest_filepath=args.train_manifest, labels=labels,
@@ -259,7 +259,7 @@ if __name__ == '__main__':
 
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
                     scaled_loss.backward()
-                optimizer.clip_master_grads(args.max_norm)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_norm)
                 optimizer.step()
             else:
                 print(error)
