@@ -20,11 +20,11 @@ from utils import convert_model_to_half, reduce_tensor, check_loss
 
 parser = argparse.ArgumentParser(description='DeepSpeech training')
 parser.add_argument('--train-manifest', metavar='DIR',
-                    help='path to train manifest csv', default='data/train_manifest.csv')
+                    help='path to train manifest csv', default='data/libri_train_manifest.csv')
 parser.add_argument('--val-manifest', metavar='DIR',
-                    help='path to validation manifest csv', default='data/val_manifest.csv')
+                    help='path to validation manifest csv', default='data/libri_val_manifest.csv')
 parser.add_argument('--sample-rate', default=16000, type=int, help='Sample rate')
-parser.add_argument('--batch-size', default=20, type=int, help='Batch size for training')
+parser.add_argument('--batch-size', default=10, type=int, help='Batch size for training')
 parser.add_argument('--num-workers', default=4, type=int, help='Number of workers used in data-loading')
 parser.add_argument('--labels-path', default='labels.json', help='Contains all characters for transcription')
 parser.add_argument('--window-size', default=.02, type=float, help='Window size for spectrogram in seconds')
@@ -33,7 +33,7 @@ parser.add_argument('--window', default='hamming', help='Window type for spectro
 parser.add_argument('--hidden-size', default=800, type=int, help='Hidden size of RNNs')
 parser.add_argument('--hidden-layers', default=5, type=int, help='Number of RNN layers')
 parser.add_argument('--rnn-type', default='gru', help='Type of the RNN. rnn|gru|lstm are supported')
-parser.add_argument('--epochs', default=70, type=int, help='Number of training epochs')
+parser.add_argument('--epochs', default=30, type=int, help='Number of training epochs')  # 70
 parser.add_argument('--cuda', dest='cuda', action='store_true', help='Use cuda to train model')
 parser.add_argument('--lr', '--learning-rate', default=3e-4, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
@@ -56,11 +56,11 @@ parser.add_argument('--finetune', dest='finetune', action='store_true',
 parser.add_argument('--augment', dest='augment', action='store_true', help='Use random tempo and gain perturbations.')
 parser.add_argument('--noise-dir', default=None,
                     help='Directory to inject noise into audio. If default, noise Inject not added')
-parser.add_argument('--noise-prob', default=0.4, help='Probability of noise being added per sample')
-parser.add_argument('--noise-min', default=0.0,
+parser.add_argument('--noise-prob', default=1.0, help='Probability of noise being added per sample')   # 0.4
+parser.add_argument('--noise-min', default=0.5,
                     help='Minimum noise level to sample from. (1.0 means all noise, not original signal)', type=float)
-parser.add_argument('--noise-max', default=0.5,
-                    help='Maximum noise levels to sample from. Maximum 1.0', type=float)
+parser.add_argument('--noise-max', default=0.8,
+                    help='Maximum noise levels to sample from. Maximum 1.0', type=float)  # 0.5
 parser.add_argument('--no-shuffle', dest='no_shuffle', action='store_true',
                     help='Turn off shuffling and sample from dataset based on sequence length (smallest to largest)')
 parser.add_argument('--no-sortaGrad', dest='no_sorta_grad', action='store_true',
