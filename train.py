@@ -33,7 +33,7 @@ parser.add_argument('--window', default='hamming', help='Window type for spectro
 parser.add_argument('--hidden-size', default=800, type=int, help='Hidden size of RNNs')
 parser.add_argument('--hidden-layers', default=5, type=int, help='Number of RNN layers')
 parser.add_argument('--rnn-type', default='gru', help='Type of the RNN. rnn|gru|lstm are supported')
-parser.add_argument('--epochs', default=30, type=int, help='Number of training epochs')  # 70
+parser.add_argument('--epochs', default=12, type=int, help='Number of training epochs')  # 70
 parser.add_argument('--cuda', dest='cuda', action='store_true', help='Use cuda to train model')
 parser.add_argument('--lr', '--learning-rate', default=3e-4, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
@@ -56,7 +56,7 @@ parser.add_argument('--finetune', dest='finetune', action='store_true',
 parser.add_argument('--augment', dest='augment', action='store_true', help='Use random tempo and gain perturbations.')
 parser.add_argument('--noise-dir', default=None,
                     help='Directory to inject noise into audio. If default, noise Inject not added')
-parser.add_argument('--noise-prob', default=1.0, help='Probability of noise being added per sample')   # 0.4
+parser.add_argument('--noise-prob', default=1.0, help='Probability of noise being added per sample')  # 0.4
 parser.add_argument('--noise-min', default=0.5,
                     help='Minimum noise level to sample from. (1.0 means all noise, not original signal)', type=float)
 parser.add_argument('--noise-max', default=0.8,
@@ -150,7 +150,7 @@ if __name__ == '__main__':
         print("Loading checkpoint model %s" % args.continue_from)
         package = torch.load(args.continue_from, map_location=lambda storage, loc: storage)
         model = DeepSpeech.load_model_package(package)
-        labels = model.labels 
+        labels = model.labels
         audio_conf = model.audio_conf
         if not args.finetune:  # Don't want to restart training
             optim_state = package['optim_dict']
@@ -171,7 +171,7 @@ if __name__ == '__main__':
                 tensorboard_logger.load_previous_values(start_epoch, package)
     else:
         with open(args.labels_path) as label_file:
-            labels = str(''.join(json.load(label_file)))
+            labels = str(''.join(json.load(label_file)))  # 29 characters or transcription
 
         audio_conf = dict(sample_rate=args.sample_rate,
                           window_size=args.window_size,
@@ -380,3 +380,6 @@ if __name__ == '__main__':
         if not args.no_shuffle:
             print("Shuffling batches...")
             train_sampler.shuffle(epoch)
+
+# nohup python -m visdom.server &
+# python train.py --noise-dir ./data/Noises/ --cuda --checkpoint --visdom

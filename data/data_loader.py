@@ -109,15 +109,16 @@ class SpectrogramParser(AudioParser):
             add_noise = np.random.binomial(1, self.noise_prob)
             if add_noise:
                 y = self.noiseInjector.inject_noise(y)
-        n_fft = int(self.sample_rate * self.window_size)
+        n_fft = int(self.sample_rate * self.window_size)  # 320
         win_length = n_fft
         hop_length = int(self.sample_rate * self.window_stride)
         # STFT
+        # Return complex-valued matrix D:[shape=(1+n_fft/2, t)]
         D = librosa.stft(y, n_fft=n_fft, hop_length=hop_length,
                          win_length=win_length, window=self.window)
-        spect, phase = librosa.magphase(D)
+        spect, phase = librosa.magphase(D) # the same shape as D
         # S = log(S+1)
-        spect = np.log1p(spect)
+        spect = np.log1p(spect)  # accurate for x so small, smooth the data
         spect = torch.FloatTensor(spect)
         if self.normalize:
             mean = spect.mean()
@@ -180,7 +181,7 @@ def _collate_fn(batch):
     freq_size = longest_sample.size(0)
     minibatch_size = len(batch)
     max_seqlength = longest_sample.size(1)
-    inputs = torch.zeros(minibatch_size, 1, freq_size, max_seqlength)
+    inputs = torch.zeros(minibatch_size, 1, freq_size, max_seqlength)  # Nx1xKxT
     input_percentages = torch.FloatTensor(minibatch_size)
     target_sizes = torch.IntTensor(minibatch_size)
     targets = []
@@ -189,7 +190,7 @@ def _collate_fn(batch):
         tensor = sample[0]
         target = sample[1]
         seq_length = tensor.size(1)
-        inputs[x][0].narrow(1, 0, seq_length).copy_(tensor)
+        inputs[x][0].narrow(1, 0, seq_length).copy_(tensor)  # KxT
         input_percentages[x] = seq_length / float(max_seqlength)
         target_sizes[x] = len(target)
         targets.extend(target)
