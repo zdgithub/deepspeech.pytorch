@@ -33,7 +33,7 @@ parser.add_argument('--window', default='hamming', help='Window type for spectro
 parser.add_argument('--hidden-size', default=800, type=int, help='Hidden size of RNNs')
 parser.add_argument('--hidden-layers', default=5, type=int, help='Number of RNN layers')
 parser.add_argument('--rnn-type', default='gru', help='Type of the RNN. rnn|gru|lstm are supported')
-parser.add_argument('--epochs', default=12, type=int, help='Number of training epochs')  # 70
+parser.add_argument('--epochs', default=15, type=int, help='Number of training epochs')  # 70
 parser.add_argument('--cuda', dest='cuda', action='store_true', help='Use cuda to train model')
 parser.add_argument('--lr', '--learning-rate', default=3e-4, type=float, help='initial learning rate')
 parser.add_argument('--momentum', default=0.9, type=float, help='momentum')
@@ -57,9 +57,9 @@ parser.add_argument('--augment', dest='augment', action='store_true', help='Use 
 parser.add_argument('--noise-dir', default=None,
                     help='Directory to inject noise into audio. If default, noise Inject not added')
 parser.add_argument('--noise-prob', default=1.0, help='Probability of noise being added per sample')  # 0.4
-parser.add_argument('--noise-min', default=0.5,
+parser.add_argument('--noise-min', default=0.7,
                     help='Minimum noise level to sample from. (1.0 means all noise, not original signal)', type=float)
-parser.add_argument('--noise-max', default=0.8,
+parser.add_argument('--noise-max', default=0.9,
                     help='Maximum noise levels to sample from. Maximum 1.0', type=float)  # 0.5
 parser.add_argument('--no-shuffle', dest='no_shuffle', action='store_true',
                     help='Turn off shuffling and sample from dataset based on sequence length (smallest to largest)')
@@ -192,6 +192,7 @@ if __name__ == '__main__':
                            mixed_precision=args.mixed_precision)
 
     decoder = GreedyDecoder(labels)
+    # normalize is True but without -mean
     train_dataset = SpectrogramDataset(audio_conf=audio_conf, manifest_filepath=args.train_manifest, labels=labels,
                                        normalize=True, augment=args.augment)
     test_dataset = SpectrogramDataset(audio_conf=audio_conf, manifest_filepath=args.val_manifest, labels=labels,

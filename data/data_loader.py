@@ -123,7 +123,7 @@ class SpectrogramParser(AudioParser):
         if self.normalize:
             mean = spect.mean()
             std = spect.std()
-            spect.add_(-mean)
+            # spect.add_(-mean)
             spect.div_(std)
 
         return spect
